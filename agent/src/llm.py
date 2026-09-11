@@ -57,7 +57,7 @@ class LLMFactory:
         if not groq_key:
             raise ValueError("GROQ_API_KEY is not configured.")
 
-        model_name = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
+        model_name = os.environ.get("GROQ_MODEL", "qwen/qwen3.8-27b").strip()
         logger.info("[LLMFactory] Initializing Groq: model=%s", model_name)
 
         try:
@@ -85,9 +85,18 @@ class LLMFactory:
             raise ValueError("OPENROUTER_API_KEY is not configured.")
 
         model_name = os.environ.get(
-            "OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"
+            "OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free"
         ).strip()
         logger.info("[LLMFactory] Initializing OpenRouter: model=%s", model_name)
+
+        # Safeguard against Windows Application Control blocking _tiktoken.pyd
+        import sys
+        from unittest.mock import MagicMock
+        try:
+            import tiktoken
+        except Exception:
+            sys.modules["tiktoken"] = MagicMock()
+            sys.modules["_tiktoken"] = MagicMock()
 
         from langchain_openai import ChatOpenAI
 

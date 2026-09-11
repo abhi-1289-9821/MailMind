@@ -5,8 +5,9 @@ uvicorn[standard]
 # ─── LangChain core + integrations ───────────────────────────────────────────
 langchain
 langchain-huggingface
-langchain-google-genai   # 100% Free LLM (Gemini 2.0 Flash)
-langchain-openai         # Optional fallback
+langchain-google-genai   # Google Gemini provider
+langchain-groq           # Groq provider (Llama-3.3)
+langchain-openai         # OpenRouter / OpenAI provider
 langchain-chroma
 langgraph                 # Agent workflows (Phase 4+)
 langsmith                 # Tracing & observability (Phase 4+)

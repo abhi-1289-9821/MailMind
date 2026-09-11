@@ -61,11 +61,18 @@ def _fmt_date(val: Any) -> str:
     return str(val)
 
 
-def format_docs(docs: list[Document]) -> str:
-    """Format retrieved documents with clean delimiters."""
+def format_docs(docs: list[Document], max_docs: int = 6) -> str:
+    """Format retrieved documents with clean delimiters and token budgeting."""
     if not docs:
         return "No relevant emails found."
-    return "\n\n---\n\n".join(doc.page_content for doc in docs)
+    selected = docs[:max_docs]
+    parts = []
+    for doc in selected:
+        content = doc.page_content.strip()
+        if len(content) > 1400:
+            content = content[:1400] + "... [truncated]"
+        parts.append(content)
+    return "\n\n---\n\n".join(parts)
 
 
 def run_query(question: str, user_email: Optional[str] = None) -> dict:

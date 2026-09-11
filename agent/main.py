@@ -1,10 +1,11 @@
 """
-main.py — FastAPI application for the GemAI agent/RAG service.
+main.py — FastAPI application for the MailMind AI Agent & RAG Service.
 
-Phase 2: POST /ingest and GET /health only.
-Phase 3: adds POST /query
-Phase 4: LangGraph workflow + LangSmith tracing
-Phase 5: POST /draft (Node.js proxies all routes here)
+Architecture:
+- GET  /health — Service health and readiness check
+- POST /ingest — Incremental embedding pipeline (ONNX BGE-base into ChromaDB)
+- POST /query  — LangGraph Corrective RAG (CRAG) with structured groundedness check
+- POST /draft  — Human-in-the-Loop context-aware reply generator
 """
 
 import logging
@@ -23,26 +24,26 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
 )
-logger = logging.getLogger("gemai-agent")
+logger = logging.getLogger("mailmind-agent")
 
 # ─── Lifespan ─────────────────────────────────────────────────────────────────
 # Pre-load the embedding model at startup so the first /ingest call isn't slow.
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting GemAI agent service (Phase 2) …")
+    logger.info("Starting MailMind agent service …")
     # Eagerly load the BGE model so it's warm before the first request
     from src.embedder import _get_embeddings
     _get_embeddings()
     logger.info("Embedding model ready. Service is up.")
     yield
-    logger.info("GemAI agent service shutting down.")
+    logger.info("MailMind agent service shutting down.")
 
 
 app = FastAPI(
-    title="GemAI Agent Service",
+    title="MailMind Agent Service",
     description="RAG + LangGraph email assistant backend",
-    version="0.2.0",
+    version="1.0.0",
     lifespan=lifespan,
 )
 
@@ -102,7 +103,7 @@ class DraftResponse(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "gemai-agent", "phase": 5}
+    return {"status": "ok", "service": "mailmind-agent", "version": "1.0.0"}
 
 
 @app.post("/ingest", response_model=IngestResponse)

@@ -37,6 +37,8 @@ Formatting Instructions:
 - Use bold section headers (e.g. **Date / Category:**) to group items logically.
 - Bold key entities such as job titles, company names, deadlines, amounts, and dates.
 - Ensure proper paragraph and line spacing between sections for readability.
+- When the user asks for "all" or multiple items (e.g., all rejections, all deadlines, all budgets, all proposals), carefully check every provided excerpt and list every single matching item.
+- Accurately distinguish matching items (e.g. identify actual job rejection notifications like "unable to proceed" or "not moving forward", and do not confuse them with application receipt confirmations or account setup emails).
 
 --- EMAIL EXCERPTS ---
 {context}

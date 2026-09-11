@@ -66,8 +66,73 @@ class GroundednessCheck(BaseModel):
 
 # ─── Graph Nodes ──────────────────────────────────────────────────────────────
 
+def _search_sqlite_keywords(user_email: Optional[str], query: str) -> list[Document]:
+    """
+    Keyword search in SQLite to catch explicit terms and domain synonyms that
+    dense semantic embeddings might rank lower (e.g. 'unable to proceed' for rejection queries).
+    """
+    import sqlite3
+    from .chunker import build_documents
+
+    db_path = os.environ.get("SQLITE_DB_PATH", "../server/data/gemai.db")
+    if not os.path.exists(db_path):
+        return []
+
+    q_lower = query.lower()
+    stopwords = {
+        "what", "were", "the", "did", "say", "about", "is", "of", "all",
+        "mail", "email", "emails", "from", "company", "companies", "to",
+        "in", "and", "or", "for", "with", "any", "my", "me", "show", "list",
+        "tell", "give", "get", "find"
+    }
+    raw_words = [w.strip("?,!.:;\"'()[]{}") for w in q_lower.split()]
+    meaningful = [w for w in raw_words if len(w) > 2 and w not in stopwords]
+
+    terms = list(meaningful)
+    if any(r in q_lower for r in ["reject", "rejection", "declined"]):
+        terms.extend([
+            "unable to proceed", "not moving forward", "regret to inform",
+            "not selected", "unsuccessful", "unfortunately"
+        ])
+    if any(d in q_lower for d in ["deadline", "due"]):
+        terms.extend(["due date", "deadline", "by end of day", "eod"])
+    if any(b in q_lower for b in ["budget", "cost", "pricing", "expense"]):
+        terms.extend(["budget", "estimate", "quote", "cost", "invoice"])
+
+    if not terms:
+        return []
+
+    unique_terms = list(dict.fromkeys(terms))[:10]
+
+    try:
+        con = sqlite3.connect(db_path)
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+
+        conditions = " OR ".join(
+            ["lower(body) LIKE ?" for _ in unique_terms] +
+            ["lower(subject) LIKE ?" for _ in unique_terms]
+        )
+        params = [f"%{t}%" for t in unique_terms] * 2
+
+        if user_email:
+            sql = f"SELECT * FROM emails WHERE user_email = ? AND ({conditions}) ORDER BY date_sent DESC LIMIT 25"
+            rows = cur.execute(sql, [user_email] + params).fetchall()
+        else:
+            sql = f"SELECT * FROM emails WHERE ({conditions}) ORDER BY date_sent DESC LIMIT 25"
+            rows = cur.execute(sql, params).fetchall()
+
+        con.close()
+        if not rows:
+            return []
+        return build_documents([dict(r) for r in rows])
+    except Exception as exc:
+        logger.warning("SQLite keyword search fallback error: %s", exc)
+        return []
+
+
 def retrieve_emails(state: GraphState) -> dict:
-    """Retrieve top-k relevant email chunks from Chroma and accumulate documents."""
+    """Retrieve top-k relevant email chunks from Chroma + SQLite keywords and accumulate documents."""
     chroma_path = os.environ.get("CHROMA_DB_PATH", "./chroma_db")
     collection = os.environ.get("CHROMA_COLLECTION", "gemai_emails")
     query = state.get("current_query") or state["question"]
@@ -76,14 +141,15 @@ def retrieve_emails(state: GraphState) -> dict:
     retriever = get_retriever(
         chroma_path=chroma_path,
         collection=collection,
-        k=5,
+        k=20,  # Increased from 5 to 20 for thorough coverage of aggregation questions
         user_email=user_email,
     )
 
     logger.info("Retrieving emails for query: '%s' (user: %s)", query, user_email or "all")
-    new_docs = retriever.invoke(query)
+    dense_docs = retriever.invoke(query)
+    keyword_docs = _search_sqlite_keywords(user_email, query)
 
-    # Document accumulation: on retry, merge new docs with existing ones (deduplicated by message_id)
+    # Document accumulation: merge new dense + keyword docs with existing ones (deduplicated by message_id)
     existing_docs = state.get("documents", [])
     seen_message_ids = {
         doc.metadata.get("message_id")
@@ -92,7 +158,7 @@ def retrieve_emails(state: GraphState) -> dict:
     }
 
     merged_docs = list(existing_docs)
-    for doc in new_docs:
+    for doc in list(dense_docs) + list(keyword_docs):
         mid = doc.metadata.get("message_id")
         if not mid or mid not in seen_message_ids:
             if mid:
@@ -291,6 +357,53 @@ agent_app = build_graph()
 
 # ─── Execution Runner ─────────────────────────────────────────────────────────
 
+def _filter_cited_sources(answer: str, sources: list[dict]) -> list[dict]:
+    """Filter sources list to only include emails actually cited or discussed in the answer."""
+    import re
+    if not sources or not answer:
+        return []
+
+    # If it's a refusal answer, return empty sources
+    ans_lower = answer.lower()
+    if "couldn't find that information" in ans_lower or "not enough information" in ans_lower:
+        return []
+
+    # Extract bolded entities from answer (e.g. company names, job titles, senders)
+    bolded = [b.lower().strip() for b in re.findall(r"\*\*([^*]+)\*\*", answer)]
+    meta_headers = {
+        "company:", "company", "date:", "date", "job title:", "status:",
+        "rejections by date:", "rejections:", "job rejections:", "category:",
+        "sender:", "subject:", "position:"
+    }
+    entities = [e for e in bolded if e not in meta_headers and len(e) > 2]
+
+    relevant = []
+    for s in sources:
+        subj = (s.get("subject") or "").lower()
+        snd = (s.get("sender") or "").lower()
+        combined = f"{subj} {snd}"
+        snd_clean = snd.split("<")[0].strip() if "<" in snd else snd
+
+        is_matched = False
+        # 1. Match against extracted bold entities from the answer
+        if any(e in combined for e in entities):
+            is_matched = True
+        # 2. Match if clean sender name is in answer
+        elif snd_clean and len(snd_clean) > 2 and snd_clean in ans_lower:
+            is_matched = True
+        # 3. Match distinct company or subject keywords
+        else:
+            for w in snd_clean.split():
+                if len(w) > 3 and w in ans_lower:
+                    is_matched = True
+                    break
+
+        if is_matched:
+            relevant.append(s)
+
+    return relevant if relevant else sources[:5]
+
+
 def run_agent(question: str, user_email: Optional[str] = None) -> dict:
     """
     Execute the LangGraph agent workflow for a user question.
@@ -319,7 +432,11 @@ def run_agent(question: str, user_email: Optional[str] = None) -> dict:
     logger.info("Starting LangGraph agent execution for question: '%s'", question)
     final_state = agent_app.invoke(initial_state)
 
+    raw_answer = final_state.get("answer", "")
+    raw_sources = final_state.get("sources", [])
+    filtered_sources = _filter_cited_sources(raw_answer, raw_sources)
+
     return {
-        "answer": final_state.get("answer", ""),
-        "sources": final_state.get("sources", []),
+        "answer": raw_answer,
+        "sources": filtered_sources,
     }

@@ -191,7 +191,7 @@ export function DraftView({ email, selectedThreadId, onError }) {
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
             </svg>
             <span>
-              <strong>Safety Guard:</strong> System will NEVER send without your explicit approval. Send scope is omitted by design.
+              <strong>Human-in-the-Loop:</strong> System will NEVER send without your explicit review. Approving will dispatch this email directly through your Gmail account.
             </span>
           </div>
 
@@ -206,14 +206,15 @@ export function DraftView({ email, selectedThreadId, onError }) {
               {approving ? (
                 <>
                   <span className="spinner"></span>
-                  Recording Approval...
+                  Sending via Gmail...
                 </>
               ) : (
                 <>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="20 6 9 17 4 12"></polyline>
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                   </svg>
-                  Approve & Record Send
+                  Approve & Send Email Directly
                 </>
               )}
             </button>
@@ -224,10 +225,15 @@ export function DraftView({ email, selectedThreadId, onError }) {
                 <polyline points="22 4 12 14.01 9 11.01"></polyline>
               </svg>
               <div>
-                <strong>Approval Recorded (Audit #{approvalResult.audit_id})</strong>
+                <strong>Email Sent Directly via Gmail (Audit #{approvalResult.audit_id})</strong>
                 <div style={{ fontSize: '12px', marginTop: '2px' }}>
                   {approvalResult.message}
                 </div>
+                {approvalResult.message_id && (
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    Gmail Message ID: <code>{approvalResult.message_id}</code>
+                  </div>
+                )}
               </div>
             </div>
           )}

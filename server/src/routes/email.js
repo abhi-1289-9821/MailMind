@@ -1,7 +1,7 @@
 'use strict';
 
 const express = require('express');
-const { fetchAndStoreEmails } = require('../services/gmail');
+const { fetchAndStoreEmails, sendEmail } = require('../services/gmail');
 const { isAuthorized } = require('../auth/google');
 const { recordApproval, db } = require('../db');
 
@@ -23,7 +23,7 @@ async function proxyToAgent(endpoint, body, res) {
   } catch (err) {
     console.error(`[proxy ${endpoint}] Error connecting to agent service:`, err.message);
     return res.status(503).json({
-      error: `Agent service unavailable at ${AGENT_URL}: ${err.message}`,
+      error: 'Agent service is unreachable. Ensure the Python agent is running on port 8000.',
     });
   }
 }
@@ -101,8 +101,7 @@ router.post('/agent/query', handleQuery);
 
 // ─── POST /draft (and /agent/draft) ───────────────────────────────────────────
 /**
- * Request a draft email reply from the Python agent service.
- * Transparently returns Python agent status code and response payload.
+ * Generate a reply draft using the Python agent's draft node.
  *
  * Body: { "email": "...", "thread_id": "...", "instruction": "..." }
  */
@@ -121,12 +120,9 @@ router.post('/agent/draft', handleDraft);
 
 // ─── POST /draft/approve (and /approve-send) ──────────────────────────────────
 /**
- * Human-in-the-loop approval endpoint.
- *
- * Requirements:
- * - Explicit user confirmation before any send action can be acknowledged.
- * - Stores audit entry in SQLite approvals table.
- * - Safe by design: gmail.send OAuth scope is intentionally omitted.
+ * Human-in-the-Loop approval gate:
+ * - Records the approved draft in the local audit log.
+ * - Directly dispatches the email to the recipient via Gmail API (gmail.send).
  *
  * Body: { "email": "...", "thread_id": "...", "to": "...", "subject": "...", "body": "..." }
  */
@@ -152,11 +148,35 @@ async function handleApprove(req, res) {
       `[APPROVAL] Email send approved by ${email} to ${to} for thread ${thread_id} (audit_id: ${auditId})`
     );
 
+    // Send email directly through Gmail API
+    let sendResult = null;
+    try {
+      sendResult = await sendEmail(email, {
+        to,
+        subject: subject || '',
+        body,
+        threadId: thread_id,
+      });
+      console.log(`[APPROVAL] Email successfully sent via Gmail API! Message ID: ${sendResult.id}`);
+    } catch (sendErr) {
+      console.error('[APPROVAL] Gmail API send error:', sendErr.message);
+      if (sendErr.message?.includes('insufficient') || sendErr.code === 403) {
+        return res.status(403).json({
+          success: false,
+          audit_id: auditId,
+          error: 'Missing Gmail Send permission. Please click "Connect / Login with Google" in the header to grant send permission.',
+          requiresAuth: true,
+        });
+      }
+      throw sendErr;
+    }
+
     return res.json({
       success: true,
-      status: 'approved',
+      status: 'sent',
       audit_id: auditId,
-      message: 'Draft approved and audited. (Gmail send is stubbed for safety; gmail.send scope intentionally omitted).',
+      message_id: sendResult.id,
+      message: `Email directly sent to ${to} via your Gmail account! (Audit #${auditId})`,
     });
   } catch (err) {
     console.error('[POST /draft/approve]', err.message);

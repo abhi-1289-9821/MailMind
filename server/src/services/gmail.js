@@ -194,4 +194,51 @@ async function fetchAndStoreEmails(
   return { fetched: messageRefs.length, inserted, skipped };
 }
 
-module.exports = { fetchAndStoreEmails };
+/**
+ * Send an email directly via the user's authorized Gmail account.
+ *
+ * @param {string} userEmail
+ * @param {{ to: string, subject: string, body: string, threadId?: string }} options
+ * @returns {Promise<{ id: string, threadId: string }>}
+ */
+async function sendEmail(userEmail, { to, subject, body, threadId }) {
+  const auth = getAuthorizedClient(userEmail);
+  const gmail = google.gmail({ version: 'v1', auth });
+
+  const cleanSubject = (subject || '').replace(/\r?\n/g, ' ');
+  const utf8Subject = `=?utf-8?B?${Buffer.from(cleanSubject).toString('base64')}?=`;
+
+  const lines = [
+    `From: ${userEmail}`,
+    `To: ${to}`,
+    `Subject: ${utf8Subject}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    body || '',
+  ];
+
+  const rawMessage = lines.join('\r\n');
+  const base64Encoded = Buffer.from(rawMessage, 'utf-8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  const requestBody = {
+    raw: base64Encoded,
+  };
+  if (threadId) {
+    requestBody.threadId = threadId;
+  }
+
+  const res = await gmail.users.messages.send({
+    userId: 'me',
+    requestBody,
+  });
+
+  return res.data;
+}
+
+module.exports = { fetchAndStoreEmails, sendEmail };

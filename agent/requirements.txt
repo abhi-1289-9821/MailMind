@@ -1,0 +1,24 @@
+# ─── Web framework ────────────────────────────────────────────────────────────
+fastapi
+uvicorn[standard]
+
+# ─── LangChain core + integrations ───────────────────────────────────────────
+langchain
+langchain-huggingface
+langchain-google-genai   # 100% Free LLM (Gemini 2.0 Flash)
+langchain-openai         # Optional fallback
+langchain-chroma
+langgraph                 # Agent workflows (Phase 4+)
+langsmith                 # Tracing & observability (Phase 4+)
+
+# ─── Vector store ─────────────────────────────────────────────────────────────
+chromadb
+
+# ─── Local embeddings (BGE-base-en-v1.5) ─────────────────────────────────────
+sentence-transformers
+
+# ─── Numerical (floor ensures Python 3.14 prebuilt wheel; avoid source build) ─
+numpy>=2.0
+
+# ─── Utilities ────────────────────────────────────────────────────────────────
+python-dotenv

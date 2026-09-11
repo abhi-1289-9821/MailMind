@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+**/node_modules/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# Python Virtual Environments
+.venv/
+**/.venv/
+venv/
+**/venv/
+env/
+**/env/
+
+# Environment variables — NEVER commit credentials
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Local SQLite databases & OAuth tokens
+server/data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Chroma Vector Store & Embeddings
+agent/chroma_db/
+**/chroma_db/
+
+# HuggingFace & ONNX model caches
+agent/models/
+**/models/
+.cache/
+
+# Build artifacts & distribution
+dist/
+**/dist/
+build/
+*.egg-info/
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

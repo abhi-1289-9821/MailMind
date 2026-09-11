@@ -89,20 +89,38 @@ def _search_sqlite_keywords(user_email: Optional[str], query: str) -> list[Docum
     meaningful = [w for w in raw_words if len(w) > 2 and w not in stopwords]
 
     terms = list(meaningful)
-    if any(r in q_lower for r in ["reject", "rejection", "declined"]):
-        terms.extend([
+
+    # Dynamic n-gram extraction to capture multi-word entities (e.g., "Google AI", "Gemini models", "verification code")
+    for i in range(len(raw_words) - 1):
+        w1, w2 = raw_words[i], raw_words[i + 1]
+        if w1 not in stopwords and w2 not in stopwords and len(w1) > 2 and len(w2) > 2:
+            terms.append(f"{w1} {w2}")
+
+    # Modular intent expansion registry for conversational email topics
+    intent_registry = {
+        ("reject", "rejection", "declined"): [
             "unable to proceed", "not moving forward", "regret to inform",
             "not selected", "unsuccessful", "unfortunately"
-        ])
-    if any(d in q_lower for d in ["deadline", "due"]):
-        terms.extend(["due date", "deadline", "by end of day", "eod"])
-    if any(b in q_lower for b in ["budget", "cost", "pricing", "expense"]):
-        terms.extend(["budget", "estimate", "quote", "cost", "invoice"])
+        ],
+        ("deadline", "due"): [
+            "due date", "deadline", "by end of day", "eod"
+        ],
+        ("budget", "cost", "pricing", "expense"): [
+            "budget", "estimate", "quote", "cost", "invoice"
+        ],
+        ("security", "password", "alert"): [
+            "security alert", "password changed", "unauthorized access", "verification code"
+        ],
+    }
+
+    for triggers, expansions in intent_registry.items():
+        if any(trig in q_lower for trig in triggers):
+            terms.extend(expansions)
 
     if not terms:
         return []
 
-    unique_terms = list(dict.fromkeys(terms))[:10]
+    unique_terms = list(dict.fromkeys(terms))[:12]
 
     try:
         con = sqlite3.connect(db_path)

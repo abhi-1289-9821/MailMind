@@ -5,15 +5,26 @@
 
 const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:4000';
 
+function getStoredToken() {
+  try {
+    return localStorage.getItem('mailmind_session_token');
+  } catch {
+    return null;
+  }
+}
+
 async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
+  const token = getStoredToken();
   const headers = {
     'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     ...(options.headers || {}),
   };
 
   try {
     const response = await fetch(url, {
+      credentials: 'include',
       ...options,
       headers,
     });

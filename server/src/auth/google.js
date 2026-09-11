@@ -2,6 +2,7 @@
 
 const { google } = require('googleapis');
 const { db } = require('../db');
+const { encryptToken, decryptToken } = require('../utils/crypto');
 
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
@@ -57,7 +58,7 @@ async function exchangeCode(code) {
     throw new Error('Could not retrieve email from Google userinfo endpoint');
   }
 
-  // Upsert tokens — on conflict (same user_email) update all fields
+  // Upsert tokens with AES-256-GCM encryption at rest
   const upsert = db.prepare(`
     INSERT INTO oauth_tokens (user_email, refresh_token, access_token, token_expiry, updated_at)
     VALUES (@email, @refreshToken, @accessToken, @tokenExpiry, strftime('%s','now'))
@@ -70,9 +71,9 @@ async function exchangeCode(code) {
 
   upsert.run({
     email,
-    refreshToken: tokens.refresh_token,
-    accessToken:  tokens.access_token  ?? null,
-    tokenExpiry:  tokens.expiry_date   ?? null,
+    refreshToken: encryptToken(tokens.refresh_token),
+    accessToken:  encryptToken(tokens.access_token ?? null),
+    tokenExpiry:  tokens.expiry_date ?? null,
   });
 
   return { email };
@@ -95,12 +96,12 @@ function getAuthorizedClient(userEmail) {
 
   const client = createOAuth2Client();
   client.setCredentials({
-    refresh_token: row.refresh_token,
-    access_token:  row.access_token  ?? undefined,
-    expiry_date:   row.token_expiry  ?? undefined,
+    refresh_token: decryptToken(row.refresh_token),
+    access_token:  decryptToken(row.access_token) ?? undefined,
+    expiry_date:   row.token_expiry ?? undefined,
   });
 
-  // Persist any auto-refreshed tokens back to the DB
+  // Persist any auto-refreshed tokens back to the DB encrypted
   client.on('tokens', (newTokens) => {
     const update = db.prepare(`
       UPDATE oauth_tokens
@@ -110,8 +111,8 @@ function getAuthorizedClient(userEmail) {
       WHERE user_email = @email
     `);
     update.run({
-      accessToken: newTokens.access_token  ?? row.access_token,
-      tokenExpiry: newTokens.expiry_date   ?? row.token_expiry,
+      accessToken: encryptToken(newTokens.access_token ?? decryptToken(row.access_token)),
+      tokenExpiry: newTokens.expiry_date ?? row.token_expiry,
       email:       userEmail,
     });
   });

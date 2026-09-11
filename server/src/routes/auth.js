@@ -2,6 +2,7 @@
 
 const express = require('express');
 const { getAuthUrl, exchangeCode, isAuthorized } = require('../auth/google');
+const { signSessionToken, verifySessionToken } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -20,7 +21,7 @@ router.get('/login', (req, res) => {
  * Google redirects here with `?code=...` after the user approves.
  * Exchanges the code for tokens and persists the refresh token.
  *
- * Phase 6 change: redirect to React app URL instead of JSON response.
+ * Generates a signed session token and redirects to the React app.
  */
 router.get('/callback', async (req, res) => {
   const { code, error } = req.query;
@@ -41,7 +42,11 @@ router.get('/callback', async (req, res) => {
 
   try {
     const { email } = await exchangeCode(code);
-    return res.redirect(`http://localhost:3000?authed=1&email=${encodeURIComponent(email)}`);
+    const sessionToken = signSessionToken(email);
+    const clientBaseUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+    return res.redirect(
+      `${clientBaseUrl}?authed=1&email=${encodeURIComponent(email)}&token=${encodeURIComponent(sessionToken)}`
+    );
   } catch (err) {
     console.error('[auth/callback]', err.message);
     return res.status(500).json({ success: false, error: err.message });
@@ -51,7 +56,6 @@ router.get('/callback', async (req, res) => {
 /**
  * GET /auth/status?email=...
  * Returns whether we have stored tokens for the given email.
- * Used by the React UI (Phase 6) to decide whether to show the login button.
  */
 router.get('/status', (req, res) => {
   const { email } = req.query;
@@ -60,6 +64,28 @@ router.get('/status', (req, res) => {
   }
   const authed = isAuthorized(email);
   return res.json({ authed, authorized: authed, email });
+});
+
+/**
+ * GET /auth/me
+ * Validates the caller's session token and returns identity.
+ */
+router.get('/me', (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.startsWith('Bearer ')
+    ? authHeader.slice(7).trim()
+    : req.query?.token;
+
+  const result = verifySessionToken(token);
+  if (!result.valid) {
+    return res.status(401).json({ authenticated: false, error: result.error });
+  }
+
+  return res.json({
+    authenticated: true,
+    email: result.email,
+    authorized: isAuthorized(result.email),
+  });
 });
 
 module.exports = router;

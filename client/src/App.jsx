@@ -9,7 +9,20 @@ export default function App() {
   const [email, setEmail] = useState(() => {
     // Check URL params first (e.g. after OAuth redirect), then localStorage
     const params = new URLSearchParams(window.location.search);
-    return params.get('email') || localStorage.getItem('mailmind_user_email') || localStorage.getItem('gemai_user_email') || '';
+    const tokenParam = params.get('token');
+    if (tokenParam) {
+      localStorage.setItem('mailmind_session_token', tokenParam);
+    }
+    const emailParam = params.get('email');
+    if (emailParam) {
+      localStorage.setItem('mailmind_user_email', emailParam);
+    }
+    // Clean up URL if auth params were present
+    if (tokenParam || emailParam || params.get('authed')) {
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+    return emailParam || localStorage.getItem('mailmind_user_email') || localStorage.getItem('gemai_user_email') || '';
   });
 
   const [isAuthorized, setIsAuthorized] = useState(false);

@@ -10,10 +10,23 @@ const { initDb } = require('./db');
 const app  = express();
 const PORT = process.env.PORT ?? 4000;
 
+// ─── Network & CORS Hardening ────────────────────────────────────────────────
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:3000,http://127.0.0.1:3000')
+  .split(',')
+  .map((s) => s.trim());
+
 app.use(cors({
-  // Phase 6: tighten to { origin: 'http://localhost:3000' }
-  origin: true,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS policy violation: Origin ${origin} is not permitted.`));
+  },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-session-token'],
 }));
 app.use(express.json());
 app.use(morgan('dev'));

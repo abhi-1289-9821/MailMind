@@ -4,6 +4,7 @@ const express = require('express');
 const { fetchAndStoreEmails, sendEmail } = require('../services/gmail');
 const { isAuthorized } = require('../auth/google');
 const { recordApproval, db } = require('../db');
+const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 const AGENT_URL = process.env.AGENT_SERVICE_URL || 'http://localhost:8000';
@@ -36,11 +37,12 @@ async function proxyToAgent(endpoint, body, res) {
  *
  * Response: { fetched, inserted, skipped }
  */
-router.post('/ingest', async (req, res) => {
-  const { email, limit } = req.body;
+router.post('/ingest', requireAuth, async (req, res) => {
+  const email = req.user?.email || req.body.email;
+  const { limit } = req.body;
 
   if (!email) {
-    return res.status(400).json({ error: 'Request body must include "email"' });
+    return res.status(400).json({ error: 'Request body or auth token must include "email"' });
   }
 
   if (!isAuthorized(email)) {
@@ -89,15 +91,16 @@ router.post('/ingest', async (req, res) => {
  * Body: { "email": "...", "question": "..." }
  */
 async function handleQuery(req, res) {
-  const { email, question } = req.body;
+  const email = req.user?.email || req.body.email;
+  const { question } = req.body;
   if (!email || !question) {
     return res.status(400).json({ error: 'Request body must include "email" and "question"' });
   }
   return proxyToAgent('/query', { email, question }, res);
 }
 
-router.post('/query', handleQuery);
-router.post('/agent/query', handleQuery);
+router.post('/query', requireAuth, handleQuery);
+router.post('/agent/query', requireAuth, handleQuery);
 
 // ─── POST /draft (and /agent/draft) ───────────────────────────────────────────
 /**
@@ -106,7 +109,8 @@ router.post('/agent/query', handleQuery);
  * Body: { "email": "...", "thread_id": "...", "instruction": "..." }
  */
 async function handleDraft(req, res) {
-  const { email, thread_id, instruction } = req.body;
+  const email = req.user?.email || req.body.email;
+  const { thread_id, instruction } = req.body;
   if (!email || !thread_id || !instruction) {
     return res.status(400).json({
       error: 'Request body must include "email", "thread_id", and "instruction"',
@@ -115,8 +119,8 @@ async function handleDraft(req, res) {
   return proxyToAgent('/draft', { email, thread_id, instruction }, res);
 }
 
-router.post('/draft', handleDraft);
-router.post('/agent/draft', handleDraft);
+router.post('/draft', requireAuth, handleDraft);
+router.post('/agent/draft', requireAuth, handleDraft);
 
 // ─── POST /draft/approve (and /approve-send) ──────────────────────────────────
 /**
@@ -127,7 +131,8 @@ router.post('/agent/draft', handleDraft);
  * Body: { "email": "...", "thread_id": "...", "to": "...", "subject": "...", "body": "..." }
  */
 async function handleApprove(req, res) {
-  const { email, thread_id, to, subject, body } = req.body;
+  const email = req.user?.email || req.body.email;
+  const { thread_id, to, subject, body } = req.body;
 
   if (!email || !thread_id || !to || !body) {
     return res.status(400).json({
@@ -184,16 +189,16 @@ async function handleApprove(req, res) {
   }
 }
 
-router.post('/draft/approve', handleApprove);
-router.post('/agent/draft/approve', handleApprove);
-router.post('/approve-send', handleApprove);
+router.post('/draft/approve', requireAuth, handleApprove);
+router.post('/agent/draft/approve', requireAuth, handleApprove);
+router.post('/approve-send', requireAuth, handleApprove);
 
 // ─── GET /threads ─────────────────────────────────────────────────────────────
 /**
  * Return recent email threads for the given user so they can easily pick one in the UI.
  */
-router.get('/threads', (req, res) => {
-  const { email } = req.query;
+router.get('/threads', requireAuth, (req, res) => {
+  const email = req.user?.email || req.query.email;
   if (!email) {
     return res.status(400).json({ error: 'email query param required' });
   }

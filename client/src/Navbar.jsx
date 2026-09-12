@@ -1,8 +1,14 @@
 import React from 'react';
 
-export function Navbar({ email, onEmailChange, isAuthorized, serverStatus }) {
+export function Navbar({ 
+  email, 
+  onEmailChange, 
+  isAuthorized, 
+  serverStatus,
+  viewMode,
+  onViewModeChange
+}) {
   const handleConnectGmail = () => {
-    // Direct browser to Node server OAuth login route
     window.location.href = 'http://localhost:4000/auth/login';
   };
 
@@ -10,55 +16,93 @@ export function Navbar({ email, onEmailChange, isAuthorized, serverStatus }) {
     <header className="header">
       <div className="brand">
         <div className="brand-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-            <polyline points="22,6 12,13 2,6" />
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect width="20" height="16" x="2" y="4" rx="2"/>
+            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
           </svg>
         </div>
-        <div>
-          <h1 className="brand-title" style={{ margin: 0, fontSize: '20px' }}>MailMind</h1>
-          <p className="brand-subtitle">RAG-Powered AI Email Assistant</p>
+        <div className="brand-title">
+          MailMind
+          <span className="brand-tag">Copilot</span>
         </div>
       </div>
 
+      {/* Center Segmented View Switcher */}
+      {onViewModeChange && (
+        <div className="view-switcher">
+          <button
+            type="button"
+            className={`view-tab ${viewMode === 'split' ? 'active' : ''}`}
+            onClick={() => onViewModeChange('split')}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <line x1="12" y1="3" x2="12" y2="21"/>
+            </svg>
+            Workspace
+          </button>
+          <button
+            type="button"
+            className={`view-tab ${viewMode === 'query' ? 'active' : ''}`}
+            onClick={() => onViewModeChange('query')}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            Search & Q&A
+          </button>
+          <button
+            type="button"
+            className={`view-tab ${viewMode === 'draft' ? 'active' : ''}`}
+            onClick={() => onViewModeChange('draft')}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 20h9"/>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+            Reply Studio
+          </button>
+        </div>
+      )}
+
+      {/* Right Actions & Account */}
       <div className="header-actions">
         {serverStatus ? (
-          <span className="badge badge-connected" title={`Node Server v1.0.0 (Phase ${serverStatus.phase})`}>
-            <span className="badge-dot"></span>
-            Server Live (P{serverStatus.phase})
+          <span className="status-pill status-live" title="Backend connected">
+            <span className="status-dot"></span>
+            Live
           </span>
         ) : (
-          <span className="badge badge-pending">
-            <span className="badge-dot"></span>
-            Connecting...
+          <span className="status-pill status-pending" title="Checking server...">
+            <span className="status-dot"></span>
+            Connecting
           </span>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="account-strip">
           <input
             type="email"
-            className="input"
-            style={{ width: '220px', padding: '6px 10px', fontSize: '13px' }}
-            placeholder="your.email@gmail.com"
+            className="account-input"
+            placeholder="name@gmail.com"
             value={email}
             onChange={(e) => onEmailChange(e.target.value)}
           />
 
           {isAuthorized ? (
-            <span className="badge badge-connected">
-              <span className="badge-dot"></span>
-              Gmail Linked
+            <span className="status-pill status-live" style={{ padding: '3px 8px', fontSize: '11px' }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              Linked
             </span>
           ) : (
             <button
-              className="btn btn-primary"
-              style={{ padding: '6px 12px', fontSize: '13px' }}
+              type="button"
+              className="btn btn-primary btn-sm"
               onClick={handleConnectGmail}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14h2v2h-2zm0-10h2v8h-2z"/>
-              </svg>
-              Connect Gmail
+              Connect
             </button>
           )}
         </div>

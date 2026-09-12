@@ -7,7 +7,6 @@ import { DraftView } from './DraftView';
 
 export default function App() {
   const [email, setEmail] = useState(() => {
-    // Check URL params first (e.g. after OAuth redirect), then localStorage
     const params = new URLSearchParams(window.location.search);
     const tokenParam = params.get('token');
     if (tokenParam) {
@@ -17,7 +16,6 @@ export default function App() {
     if (emailParam) {
       localStorage.setItem('mailmind_user_email', emailParam);
     }
-    // Clean up URL if auth params were present
     if (tokenParam || emailParam || params.get('authed')) {
       const cleanUrl = window.location.pathname;
       window.history.replaceState({}, document.title, cleanUrl);
@@ -29,14 +27,13 @@ export default function App() {
   const [serverStatus, setServerStatus] = useState(null);
   const [selectedThreadId, setSelectedThreadId] = useState('');
   const [globalError, setGlobalError] = useState(null);
+  const [viewMode, setViewMode] = useState('split'); // 'split' | 'query' | 'draft'
 
-  // Store email preference
   const handleEmailChange = (newEmail) => {
     setEmail(newEmail);
     localStorage.setItem('mailmind_user_email', newEmail);
   };
 
-  // Poll server health on mount
   useEffect(() => {
     api.checkHealth()
       .then((data) => setServerStatus(data))
@@ -46,7 +43,6 @@ export default function App() {
       });
   }, []);
 
-  // Check auth status whenever email changes
   useEffect(() => {
     if (!email) {
       setIsAuthorized(false);
@@ -57,6 +53,13 @@ export default function App() {
       .catch(() => setIsAuthorized(false));
   }, [email]);
 
+  const handleThreadSelect = (threadId) => {
+    setSelectedThreadId(threadId);
+    if (viewMode === 'query') {
+      setViewMode('draft');
+    }
+  };
+
   return (
     <div className="app-container">
       <Navbar
@@ -64,14 +67,16 @@ export default function App() {
         onEmailChange={handleEmailChange}
         isAuthorized={isAuthorized}
         serverStatus={serverStatus}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
       />
 
       {globalError && (
-        <div className="error-banner">
+        <div className="toast-error">
           <span>{globalError}</span>
           <button
             type="button"
-            style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontWeight: 'bold' }}
+            style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}
             onClick={() => setGlobalError(null)}
           >
             ✕
@@ -84,18 +89,22 @@ export default function App() {
         onError={(err) => setGlobalError(err)}
       />
 
-      <main className="main-grid">
-        <QueryView
-          email={email}
-          onSelectThread={(tid) => setSelectedThreadId(tid)}
-          onError={(err) => setGlobalError(err)}
-        />
+      <main className={`workspace-grid ${viewMode === 'split' ? 'split' : 'single'}`}>
+        {(viewMode === 'split' || viewMode === 'query') && (
+          <QueryView
+            email={email}
+            onSelectThread={handleThreadSelect}
+            onError={(err) => setGlobalError(err)}
+          />
+        )}
 
-        <DraftView
-          email={email}
-          selectedThreadId={selectedThreadId}
-          onError={(err) => setGlobalError(err)}
-        />
+        {(viewMode === 'split' || viewMode === 'draft') && (
+          <DraftView
+            email={email}
+            selectedThreadId={selectedThreadId}
+            onError={(err) => setGlobalError(err)}
+          />
+        )}
       </main>
     </div>
   );

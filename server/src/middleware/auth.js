@@ -4,9 +4,17 @@ const crypto = require('crypto');
 
 /**
  * Derives a secret key for session signatures.
+ * Throws at call-time if SESSION_SECRET is not set — startup validation in index.js
+ * is the primary guard, but this ensures no code path silently uses a known key.
  */
 function getSessionSecret() {
-  return process.env.SESSION_SECRET || process.env.GOOGLE_CLIENT_SECRET || 'mailmind-session-auth-secret-key';
+  const secret = process.env.SESSION_SECRET || process.env.GOOGLE_CLIENT_SECRET;
+  if (!secret) {
+    throw new Error(
+      '[auth] SESSION_SECRET is not set. The server should not have started — check index.js validateSecrets().'
+    );
+  }
+  return secret;
 }
 
 /**
@@ -118,17 +126,22 @@ function requireAuth(req, res, next) {
     return next();
   }
 
-  // Fallback for transitional local development if strict auth is not enforced via STRICT_AUTH=true
-  if (process.env.STRICT_AUTH === 'true') {
+  // Strict by default — any request without a valid session token is rejected.
+  // To allow unauthenticated local development (e.g. before OAuth is fully set up),
+  // set ALLOW_UNAUTHENTICATED_DEV=true in server/.env. Never set this in production.
+  if (process.env.ALLOW_UNAUTHENTICATED_DEV !== 'true') {
     return res.status(401).json({
       success: false,
-      error: 'Authentication required. Please log in to obtain a session token.',
+      error: 'Authentication required. Please connect your Gmail account to obtain a session token.',
     });
   }
 
-  // Permissive dev mode: allow request but bind to whatever email was provided
+  // Dev-only bypass: trust the email in the request body. Logged clearly so it is never invisible.
   const devEmail = (req.body?.email || req.query?.email || '').toLowerCase().trim();
   if (devEmail) {
+    console.warn(
+      `[auth] ALLOW_UNAUTHENTICATED_DEV bypass — treating '${devEmail}' as authenticated (dev only).`
+    );
     req.user = { email: devEmail, isDevFallback: true };
   }
   next();

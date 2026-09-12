@@ -36,6 +36,21 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+# ─── Module-level LLM Singleton ───────────────────────────────────────────────
+# Initialized once at import time to avoid re-resolving the provider chain on
+# every graph node invocation. Shared across retrieve, generate, self_check, and
+# rewrite nodes — all are stateless w.r.t the model instance.
+_llm: BaseChatModel | None = None
+
+
+def _get_llm() -> BaseChatModel:
+    """Return the module-level LLM singleton, initializing it on first call."""
+    global _llm
+    if _llm is None:
+        _llm = get_chat_model(temperature=0)
+        logger.info("[LLM Singleton] Initialized: %s", _llm.__class__.__name__)
+    return _llm
+
 
 # ─── Graph State ──────────────────────────────────────────────────────────────
 
@@ -208,7 +223,7 @@ def retrieve_emails(state: GraphState) -> dict:
 
 def generate_answer(state: GraphState) -> dict:
     """Synthesize an answer from retrieved excerpts using the configured LLM."""
-    llm = get_chat_model(temperature=0)
+    llm = _get_llm()
     prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
     chain = prompt | llm | StrOutputParser()
 
@@ -225,8 +240,7 @@ def generate_answer(state: GraphState) -> dict:
 
 def self_check(state: GraphState) -> dict:
     """Verify that the generated answer is strictly grounded in retrieved excerpts."""
-    llm = get_chat_model(temperature=0)
-    evaluator = llm.with_structured_output(GroundednessCheck)
+    llm = _get_llm()
 
     check_prompt = ChatPromptTemplate.from_messages([
         (
@@ -282,7 +296,7 @@ def self_check(state: GraphState) -> dict:
 
 def rewrite_query(state: GraphState) -> dict:
     """Reformulate the search query to retrieve missing context on retry."""
-    llm = get_chat_model(temperature=0)
+    llm = _get_llm()
     rewrite_prompt = ChatPromptTemplate.from_messages([
         (
             "system",
@@ -447,8 +461,9 @@ def run_agent(question: str, user_email: Optional[str] = None) -> dict:
     Returns:
         dict: {"answer": str, "sources": list[dict]}
     """
-    # Ensure LLM key is configured before starting graph
-    get_chat_model()
+    # Warm up / validate the LLM singleton before entering the graph.
+    # This surfaces config errors (missing API key) immediately rather than mid-graph.
+    _get_llm()
 
     initial_state: GraphState = {
         "question": question,

@@ -9,6 +9,19 @@
  * 4. User impersonation prevention and identity matching.
  */
 
+// Load .env so server secrets are available when running the test directly.
+// This mirrors the real server startup environment.
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
+
+// Ensure required secrets are set for test isolation — fall back to deterministic
+// test-only values if .env was not found (e.g. CI without secrets).
+if (!process.env.SESSION_SECRET) {
+  process.env.SESSION_SECRET = 'test-only-session-secret-not-for-production';
+}
+if (!process.env.TOKEN_ENCRYPTION_SECRET) {
+  process.env.TOKEN_ENCRYPTION_SECRET = 'test-only-encryption-secret-not-for-production';
+}
+
 const assert = require('assert');
 const { encryptToken, decryptToken, PREFIX } = require('../src/utils/crypto');
 const { signSessionToken, verifySessionToken, requireAuth } = require('../src/middleware/auth');

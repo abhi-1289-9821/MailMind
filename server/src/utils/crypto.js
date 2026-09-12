@@ -7,10 +7,17 @@ const IV_LENGTH = 12; // Standard for AES-GCM
 const PREFIX = 'enc:v1:';
 
 /**
- * Derive a 32-byte encryption key from the environment variable or fallback secret.
+ * Derive a 32-byte encryption key from the environment variable.
+ * Throws at call-time if TOKEN_ENCRYPTION_SECRET is not set — startup validation in index.js
+ * is the primary guard, but this ensures no code path silently uses a known key.
  */
 function getEncryptionKey() {
-  const secret = process.env.TOKEN_ENCRYPTION_SECRET || process.env.GOOGLE_CLIENT_SECRET || 'mailmind-secure-encryption-key-2026';
+  const secret = process.env.TOKEN_ENCRYPTION_SECRET || process.env.GOOGLE_CLIENT_SECRET;
+  if (!secret) {
+    throw new Error(
+      '[crypto] TOKEN_ENCRYPTION_SECRET is not set. The server should not have started — check index.js validateSecrets().'
+    );
+  }
   return crypto.createHash('sha256').update(secret).digest();
 }
 

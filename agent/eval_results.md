@@ -1,7 +1,7 @@
 ## RAG Evaluation Benchmark Results
 
 **Test Suite**: 10 Curated Queries across Real Inbox Data & Adversarial Negatives  
-**Evaluation Date**: 2026-09-11 | **Model**: `gemini-3.6-flash` / `qwen/qwen3.8-27b`  
+**Evaluation Date**: 2026-09-11 | **Model**: `gemini-2.0-flash` / `qwen/qwen3.8-27b`  
 
 | ID | Category | Test Query | Sources | Grounded | Latency | Result |
 | :---: | :--- | :--- | :---: | :---: | :---: | :---: |

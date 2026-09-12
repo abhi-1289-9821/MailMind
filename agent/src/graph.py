@@ -198,6 +198,18 @@ def retrieve_emails(state: GraphState) -> dict:
                 seen_message_ids.add(mid)
             merged_docs.append(doc)
 
+    # Re-rank by recency: sort by date_sent descending so the LLM always sees
+    # the newest emails first in the context window, regardless of similarity score.
+    # Docs without a date_sent fall to the end.
+    def _parse_ts(doc):
+        ts = doc.metadata.get("date_sent") or ""
+        try:
+            return float(ts) if ts else 0.0
+        except (ValueError, TypeError):
+            return 0.0
+
+    merged_docs.sort(key=_parse_ts, reverse=True)
+
     # Deduplicate sources by thread_id (highest-relevance-order wins)
     seen_threads = set()
     sources = []
@@ -266,7 +278,6 @@ def self_check(state: GraphState) -> dict:
         ),
     ])
 
-    eval_chain = check_prompt | evaluator
     context = format_docs(state.get("documents", []))
 
     logger.info("Evaluating answer groundedness...")

@@ -39,8 +39,9 @@ Formatting Instructions:
 - Ensure proper paragraph and line spacing between sections for readability.
 - When the user asks for "all" or multiple items (e.g., all rejections, all deadlines, all budgets, all proposals), carefully check every provided excerpt and list every single matching item.
 - Accurately distinguish matching items (e.g. identify actual job rejection notifications like "unable to proceed" or "not moving forward", and do not confuse them with application receipt confirmations or account setup emails).
+- The excerpts are sorted newest-first. When the user asks for "recent", "latest", or "most recent" items, prioritise excerpts with the most recent dates and highlight the newest result first.
 
---- EMAIL EXCERPTS ---
+--- EMAIL EXCERPTS (newest first) ---
 {context}
 --- END EXCERPTS ---
 
@@ -61,7 +62,7 @@ def _fmt_date(val: Any) -> str:
     return str(val)
 
 
-def format_docs(docs: list[Document], max_docs: int = 6) -> str:
+def format_docs(docs: list[Document], max_docs: int = 15) -> str:
     """Format retrieved documents with clean delimiters and token budgeting."""
     if not docs:
         return "No relevant emails found."
